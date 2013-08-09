@@ -98,27 +98,58 @@ function init (protocol) {
 	}
 
 	function initLiveModule(name, str) {
+		var events = ['touchstart', 'touchmove', 'touchend', 'mousedown', 'mousemove', 'mouseup'];
+		
 		console.log("reloading %s", name);
 		// Tear down old module
-		if (modules[name] && modules[name].teardown != undefined) {
-			modules[name].teardown();
+		var oldEnv = modules[name];
+		if (oldEnv) {
+			if (oldEnv.teardown != undefined) {
+				modules[name].teardown();
+			}
+			for (var i in events) {
+				var e = events[i];
+				var onE = 'on' + e;
+				if (oldEnv[onE] != undefined) {
+					window.removeEventListener(e, oldEnv[onE]);
+				}
+			}
 		}
 		
 		// eval
 		var env = {};
 		(function () {
+			function require(module) {return innerRequire(module, name)};
+			
+			// TODO: I haven't found a good way to keep all of this state isolated and not have to declare these explicitly
+			// Variables are not added to the window because we're eval()ing in a closure.
 			var exports;
 			var setup;
 			var update;
 			var teardown;
+			var ontouchstart;
+			var ontouchmove;
+			var ontouchend;
+			var onmousedown;
+			var onmousemove;
+			var onmouseup;
 			try {
-				function require(module) {return innerRequire(module, name)};
 				exports = {};
 				eval(str);
+				
 				env.exports = exports;
 				env.setup = setup;
 				env.update = update;
 				env.teardown = teardown;
+
+				env.ontouchstart = ontouchstart;
+				env.ontouchmove = ontouchmove;
+				env.ontouchend = ontouchend;
+
+				env.onmousedown = onmousedown;
+				env.onmousemove = onmousemove;
+				env.onmouseup = onmouseup;
+				
 			} catch (e) {
 				console.log('exception in module %s : %s. stack: %@', name, e.toString(), e.stack);
 				env = null;
@@ -126,6 +157,16 @@ function init (protocol) {
 		})();
 		if (env) {
 			modules[name] = env;
+		}
+		
+		if (env) {
+			for (var i in events) {
+				var e = events[i];
+				var onE = 'on' + e;
+				if (env[onE] != undefined) {
+					window.addEventListener(e, env[onE]);
+				}
+			}
 		}
 	}
 

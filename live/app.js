@@ -1,24 +1,29 @@
 
+var config = {
+	drawLines: 0
+};
+
 var hasmoved = {};
 var mouseDownness;
 
 var lastTouchPositions = {};
 var trackingNone = false;
 
-function ColorAdjuster(name, color, location) {
+function ColorAdjuster(name, color, strokeColor, location) {
 	this.value = 1;
 	this.name = name;
 	this.color = color;
+	this.strokeColor = strokeColor;
 	this.location = location;
 	this.touches = [];
-		
+	
 	return this;
 }
 
 ColorAdjuster.prototype.hitTest = function (x,y) {
 	var w = canvas.width;
 	var h = canvas.height;
-	var maxR = w / 2.5 / (1.0 - zoom);
+	var maxR = w / 2.5 / (1.0 - zoom.value);
 	var dx = x - this.location.x - w/2;
 	var dy = y - this.location.y - h/2;
 	return dx * dx + dy * dy < maxR * maxR;
@@ -47,7 +52,11 @@ ColorAdjuster.prototype.updateTouch = function (id, x, y) {
 }
 
 ColorAdjuster.prototype.update = function (t, dt) {
-
+	var utils = require('utils.js');
+	var lerp = utils.lerp;
+	var clamp = utils.clamp;
+	
+	this.value = this.touches.length > 0 ? this.value : clamp(this.value, 0,1);
 }
 
 ColorAdjuster.prototype.removeTouch = function (id, x, y) {
@@ -58,6 +67,28 @@ ColorAdjuster.prototype.removeTouch = function (id, x, y) {
 			touches.remove(t);
 		}
 	}
+}
+
+function Bouncy() {
+	this.value = 0
+	this.velocity = 0
+	this.target = 0
+	
+	this.damping = 0.99
+	this.tension = 30
+}
+
+Bouncy.prototype.update = function(dt) {
+	var value = this.value;
+	var velocity = this.velocity;
+	var target = this.target;
+	
+	velocity += this.tension * dt * (target - value);
+	velocity *= this.damping;
+	value += dt * velocity;
+	
+	this.value = value;
+	this.velocity = velocity;
 }
 
 Array.prototype.remove = function(v) {
@@ -73,8 +104,7 @@ function update (t, dt) {
 	var clamp = utils.clamp;
 	var rgba = utils.rgba;
 	
-	
-	zoom = lerp(zoom, zoomTarget * 0.99, 0.05);
+	zoom.update(dt);
 	
 	var canvas = document.getElementById('canvas');
 	var ctx = canvas.getContext('2d');
@@ -97,8 +127,8 @@ function update (t, dt) {
 	
 	mouseDownness = lerp(mouseDownness, anyHit, 0.1);
 	
-	
-	var maxR = w / 2.5 / (1.0 - zoom);
+	var maxR = w * 0.55 / (1.0 - zoom.value);
+	var minR = w * 0.1;
 	
 	for (var name in channels) {
 		var channel = channels[name];
@@ -109,87 +139,104 @@ function update (t, dt) {
 	// Draw circles
 	for (var name in channels) {
 		var channel = channels[name];
-		
-		ctx.beginPath();
+		var hit = channel.touches.length > 0;
+
 		ctx.fillStyle = channel.color
-		ctx.globalAlpha = channel.value;
 		
-		var x = channel.location.x / (1.0 - zoom);
-		var y = channel.location.y / (1.0 - zoom);
-		
+		var x = channel.location.x / (1.0 - zoom.value);
+		var y = channel.location.y / (1.0 - zoom.value);
+
+		ctx.beginPath();
 		ctx.arc(x, y, maxR, 0, 2*Math.PI);
-		ctx.fill();
 		ctx.closePath();
+			
+		ctx.globalAlpha = channel.value;
+		ctx.fill();
+		
+		var innerR = hit ? clamp( lerp(minR, maxR, channel.value), minR, maxR) : minR;
+		ctx.beginPath();
+		ctx.arc(x, y, innerR, 0, 2*Math.PI);
+		ctx.closePath();
+
+		ctx.globalAlpha = 1.0;
+		ctx.fill();
 	}
 
 	ctx.globalCompositeOperation = 'source-over';	
 	ctx.globalAlpha = 1;
-
-	// Draw dark rings
-	for (var name in channels) {
-		var channel = channels[name];
-		if (channel.touches.count == 0) continue;
-		var x = channel.location.x / (1.0 - zoom);
-		var y = channel.location.y / (1.0 - zoom);
-		ctx.strokeStyle = 'black'
-		ctx.globalAlpha = 0.2 * (1 - zoom);
-	
-		ctx.beginPath();
-		ctx.arc(x, y, channel.value * maxR, 0, 2*Math.PI);
-		ctx.lineWidth = 4;
-		ctx.stroke();
-		ctx.closePath();
-	}
 	
 	// Draw light rings
 	ctx.globalAlpha = 1;
-	for (var name in channels) {
-		var channel = channels[name];
+	if (config.drawLines) {
+		for (var name in channels) {
+			var channel = channels[name];
+			var hit = channel.touches.length > 0;
+			var x = channel.location.x / (1.0 - zoom.value);
+			var y = channel.location.y / (1.0 - zoom.value);
+			var r = clamp( lerp(minR, maxR, channel.value), minR, maxR);
 
-		var x = channel.location.x / (1.0 - zoom);
-		var y = channel.location.y / (1.0 - zoom);
 
-		ctx.strokeStyle = 'white'
-		ctx.globalAlpha = 0.8 * (1 - zoom);
+			ctx.beginPath();
+			ctx.arc(x, y, r, 0, 2*Math.PI);
+			ctx.closePath();
 
-		ctx.beginPath();
-		ctx.arc(x, y, channel.value * maxR, 0, 2*Math.PI);
-		ctx.lineWidth = 2;
-		ctx.stroke();
-		ctx.closePath();
+			ctx.lineWidth = 1;
+			ctx.strokeStyle = 'white'
+	//		ctx.strokeStyle = channel.strokeColor
+			ctx.globalAlpha = hit ? 1.0 : 0.01 * (1 - zoom.value);
+			ctx.stroke();
+		}
 	}
 	ctx.globalAlpha = 1;
 	
 	for (var name in channels) {
 		var channel = channels[name];
-		var x = channel.location.x / (1.0 - zoom);
-		var y = channel.location.y / (1.0 - zoom);
+		var hit = channel.touches.length > 0;
+		var x = channel.location.x / (1.0 - zoom.value);
+		var y = channel.location.y / (1.0 - zoom.value);
 	
-		ctx.fillStyle = 'white';
+		ctx.fillStyle = channel.value < 0.75 ? 'white' : 'black';
 		ctx.textBaseline = 'middle';
 		ctx.textAlign = 'center';
 		ctx.font = '20pt HelveticaNeue-UltraLight'
 		ctx.fillText(name.toUpperCase(), x, y, 20);
 	}
 	
+	
+	// Update channels
+	for (var name in channels) {
+		channels[name].update(t, dt);
+	}
+
 	ctx.restore();
 }
 
 function setup() {
-	zoom = 0.5;
-	zoomTarget = 0.0;
+	zoom = new Bouncy();
+	zoom.target = 0
+	zoom.velocity = 0.4
+	zoom.damping = 0.98
+	zoom.tension = 43
+	
+	var o = {a:null};
+	(function () {
+	with (o) {
+		a = 'p';
+	}
+	})();
+	console.log("a : " + o.a);
 
 	var utils = require('utils.js');
 	var rgba = utils.rgba;
 
 	var sq = Math.sqrt(3) / 3;
 	
-	var d = 100;
+	var d = 180;
 
 	channels = {
-		r: new ColorAdjuster('r', rgba(255, 0, 0), {x:0, y:-1 * d}),
-		g: new ColorAdjuster('g', rgba(0, 255, 0), {x:-sq * d, y:0}),
-		b: new ColorAdjuster('b', rgba(0, 0, 255), {x:sq * d, y:0}),
+		r: new ColorAdjuster('r', rgba(255, 0, 0), rgba(255, 100, 20), {x:0, y:-1/2 * d}),
+		g: new ColorAdjuster('g', rgba(0, 255, 0), rgba(40, 255, 0), {x:-sq * d, y:1/2 * d}),
+		b: new ColorAdjuster('b', rgba(0, 0, 255), rgba(255, 255, 255), {x:sq * d, y:1/2 * d}),
 	}
 	
 	channels.r.value = Math.random();
@@ -198,41 +245,26 @@ function setup() {
 	
 	console.log('setup called');
 
-	window.addEventListener('touchstart', ontouchstart);
-	window.addEventListener('touchmove', ontouchmove);
-	window.addEventListener('touchend', ontouchend);
-
-	window.addEventListener('mousedown', onmousedown);
-	window.addEventListener('mouseup', onmouseup);
-	window.addEventListener('mousemove', onmousemove);
 }
 
 function teardown() {
 	delete channels;
 	
 	console.log('teardown called');
-	window.removeEventListener('touchstart', ontouchstart);
-	window.removeEventListener('touchmove', ontouchend);
-	window.removeEventListener('touchend', ontouchend);
-
-	window.removeEventListener('mousedown', onmousedown);
-	window.removeEventListener('mouseup', onmouseup);
-	window.removeEventListener('mousemove', onmousemove);
 }
 
 function onmousedown(e) {
+	var utils = require('utils.js');
+
+	console.log(utils.describe(e))
+	
 	hasmoved['mouse'] = false;
-	var hasHit = false;
 	for (var name in channels) {
 		var channel = channels[name];
 		if (channel.hitTest(e.x, e.y)) {
-			hasHit = true;
 			console.log('hit ' + name);
 			channel.addTouch('mouse', e.x, e.y);
 		}
-	}
-	if (!hasHit) {
-		
 	}
 	lastTouchPositions['mouse'] = {x:e.x, y:e.y};
 }
@@ -243,7 +275,7 @@ function onmouseup(e) {
 		channel.removeTouch('mouse');
 	}
 	if (!hasmoved['mouse']) {
-		zoomTarget = zoomTarget < 0.7 ? 1.0 : 0.0;
+		zoom.target = zoom.target < 0.7 ? 1.0 : 0.0;
 	}
 }
 
@@ -263,19 +295,43 @@ function onmousemove(e) {
 
 
 function ontouchstart (e) {
-	zoomTarget = 1.0;
+	var utils = require('utils.js');
+	var each = utils.each;
+	
+	console.log('touch start :' + utils.describe(e.touches[0]) )
+
 	for (var name in channels) {
 		var channel = channels[name];
-		if (channel.hitTest(e.x, e.y)) {
-			e.touches.each(function (t) {channel.addTouch(t.identifier, t.clientX, t.clientY)});
-		}
+		each(e.touches, function (i, t) {
+			if (channel.hitTest(t.clientX, t.clientX)) {
+				console.log('hit ' + name);
+				hasmoved[t.identifier] = false;
+				channel.addTouch(t.identifier, t.clientX, t.clientY);
+			}
+		});
 	}
 }
 
 function ontouchmove (e) {
-	updateCentroid(e);
+	var utils = require('utils.js');
+	var each = utils.each;
+
+	for (var name in channels) {
+		var channel = channels[name];
+		each(e.touches, function (i, t) {
+			hasmoved[t.identifier] = true;
+			channel.updateTouch(t.identifier, t.clientX, t.clientY);
+		});
+	}
 }
 
 function ontouchend (e) {
-	zoomTarget = e.touches.length > 0 ? 1 : 0;
+	var utils = require('utils.js');
+	var each = utils.each;
+		
+	each(channels, function(name, channel) {
+		each(e.touches, function (i, t) {
+			channel.removeTouch(t.identifier);
+		});
+	});	
 }
