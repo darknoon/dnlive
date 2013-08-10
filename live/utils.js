@@ -2,6 +2,9 @@
 
 
 function clamp(v, min, max) {
+	if (arguments.length == 1) {
+		return clamp(v, 0,1)
+	}
 	return Math.min(Math.max(min, v), max);
 }
 
@@ -11,13 +14,17 @@ exports.test = function (n) {
 
 function rgba(r, g, b, a) {
 	if (arguments.length > 3) {
-		return 'rgba(' + clamp(r,0,255) + ',' + clamp(g,0,255) + ',' + clamp(b,0,255) + ',' + clamp(a,0,1) + ')';
+		return 'rgba(' + clamp(r,0,255) + ',' + clamp(g,0,255) + ',' + clamp(b,0,255) + ',' + clamp(a, 0,1) + ')';
 	} else if (arguments.length > 2) {
 		return rgba(r, g, b, 1);
 	} else if (arguments.length > 1) {
 		return rgba(arguments[0], arguments[0], arguments[0], arguments[1]);
-	} else {
-		return rgba(r, r, r, 1);
+	} else if (arguments.length == 1) {
+		if (r.constructor == Object) {
+			return rgba(r.r, r.g, r.b, r.a)
+		} else {
+			return rgba(r, r, r, 1)
+		}
 	}
 }
 
