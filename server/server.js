@@ -2,15 +2,25 @@
 
 var config = {
 	port: 8080,
-	appDirectory: __dirname + '/../live'
 };
 
-var protocol = require('../shared/protocol.js');
-var watch = require('watch'),
-     path = require('path'),
-       fs = require('fs');
 
+var protocol = require('../shared/protocol.js');
+var watch = require('watch');
+var path = require('path');
+var fs = require('fs');
 var WebSocketServer = require('ws').Server;
+
+// Process command arguments
+if (process.argv.length > 1) {
+	config.appDirectory = path.normalize(path.join(__dirname, process.argv[2]));
+	console.log("opening " +  config.appDirectory);
+} else {
+	console.log("No path specified.");
+	console.log("Usage: node server.js path/to/live/dir");
+	process.exit();
+}
+
 
 wss = new WebSocketServer({port: config.port});
 
@@ -37,6 +47,10 @@ wss.on('connection', function(ws) {
     	var i = connections.indexOf(ws);
     	connections = connections.splice(ws,i);
     	console.log('connection closed. %d connections remain.', connections.length);
+    });
+    
+    ws.on('error', function(e) {
+    	console.log('ws error ' + e);
     });
 });
 
