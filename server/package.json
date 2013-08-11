@@ -1,0 +1,15 @@
+{
+  "name": "dnlive-server",
+  "version": "0.0.1",
+  "dependencies": {
+    "watch": "0.8.x",
+    "ws": "0.4.x"
+  },
+  "engines": {
+    "node": "0.8.x"
+  },
+  "author": {
+    "name": "Andrew Pouliot",
+    "email": "andrew@darknoon.com"
+  }
+}
