@@ -32,6 +32,11 @@ function lerp(a, b, k) {
 	return (1-k) * a + k * b;
 }
 
+// Ramp up the value from 0 to 1 over (min, max) and have 0 / 1 elsewhere
+function ramp(min, max, value) {
+	return clamp( 1/(max-min) * value - min );
+}
+
 function describe(obj) {
 	var output = '{\n';
 	each(obj, function(k,v) {
@@ -42,8 +47,10 @@ function describe(obj) {
 }
 
 function each(o, fn) {
-	for (k in o) {
-		fn(k, o[k]);
+	for (var k in o) {
+		if (o.hasOwnProperty(k)) {
+			fn(k, o[k]);
+		}
 	}
 }
 
@@ -52,3 +59,4 @@ exports.rgba = rgba
 exports.lerp = lerp
 exports.describe = describe
 exports.each = each
+exports.ramp = ramp
