@@ -231,7 +231,8 @@ function update (t, dt) {
 
 function setup() {
 	var canvas = document.getElementById('canvas');
-	canvas.MSAAEnabled = true
+	// This is too slow, except on iPhone 5-class devices
+	// canvas.MSAAEnabled = true
 
 	zoom = new Bouncy();
 	
