@@ -3,7 +3,8 @@
   "version": "0.0.1",
   "dependencies": {
     "watch": "0.8.x",
-    "ws": "0.4.x"
+    "ws": "0.4.x",
+    "mime": "1.2.10"
   },
   "engines": {
     "node": "0.8.x"

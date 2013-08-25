@@ -10,10 +10,14 @@ var watch = require('watch');
 var path = require('path');
 var fs = require('fs');
 var WebSocketServer = require('ws').Server;
+var url = require("url");
+var mime = require("mime")
+
+var http = require("http");
 
 // Process command arguments
 if (process.argv.length > 1) {
-	config.appDirectory = path.normalize(path.join(__dirname, process.argv[2]));
+	config.appDirectory = path.normalize(path.join(process.cwd(), process.argv[2]));
 	console.log("opening " +  config.appDirectory);
 } else {
 	console.log("No path specified.");
@@ -22,7 +26,44 @@ if (process.argv.length > 1) {
 }
 
 
-wss = new WebSocketServer({port: config.port});
+// Static site server
+// via https://gist.github.com/respectTheCode/1926868
+
+console.log("starting web server on port " + config.port);
+
+var clientDir = path.normalize(path.join(__dirname, '../'));
+
+var httpServer = http.createServer(function(request, response) {
+	console.log("request " + request.url);
+
+	function reportError(code, message) {
+		response.writeHead(code, {"Content-Type": "text/plain"});
+    	response.write(code + ' ' + message + '\n');
+    	response.end();
+    	return;
+	}
+
+	var uri = url.parse(request.url).pathname;
+	var filename = path.join(clientDir, uri);
+	
+	fs.exists(filename, function(exists) {
+		if(!exists) return reportError(404, "Not Found");
+ 
+		if (fs.statSync(filename).isDirectory()) filename += '/index.html';
+ 
+		fs.readFile(filename, "binary", function(err, file) {
+			if(err) return reportError(500, err);
+
+			response.writeHead(200, {"Content-Type": mime.lookup(filename)});
+			response.write(file, "binary");
+			response.end();
+		});
+	});
+}).listen(config.port);
+
+// Websocket server
+
+wss = new WebSocketServer({server: httpServer});
 
 wss.on('connection', function(ws) {
 	console.log('client connected : %s', ws );
@@ -102,10 +143,7 @@ function relativePath (f) {
 	return path.relative(config.appDirectory, f);
 }
 
-
 watch.createMonitor(config.appDirectory, {interval: 100}, function (monitor) {
-	//monitor.files['/home/mikeal/.zshrc'] // Stat object for my zshrc.
-	
 	
 	monitor.on("created", function (f, stat) {
 		var e = {};
@@ -116,7 +154,6 @@ watch.createMonitor(config.appDirectory, {interval: 100}, function (monitor) {
 	})
 	monitor.on("changed", function (f, curr, prev) {
 		//console.log("curr : %@, prev: %@", JSON.stringify(curr), JSON.stringify(prev));
-		
 		var e = {};
 		e[protocol.EVENT] = protocol.events.FILE_CHANGED;
 		e[protocol.FILE_NAME] = relativePath(f);
